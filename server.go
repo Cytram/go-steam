@@ -3,12 +3,9 @@ package steam
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
 	"net"
 	"sync"
 	"time"
-
-	logrus "github.com/Sirupsen/logrus"
 )
 
 type DialFn func(network, address string) (net.Conn, error)
@@ -82,9 +79,6 @@ func (s *Server) init() error {
 	}
 	var err error
 	if s.usock, err = newUDPSocket(s.dial, s.addr); err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("steam: could not open udp socket")
 		return err
 	}
 	return nil
@@ -94,13 +88,7 @@ func (s *Server) initRCON() (err error) {
 	if s.addr == "" {
 		return errors.New("steam: server needs a address")
 	}
-	log.WithFields(logrus.Fields{
-		"addr": s.addr,
-	}).Debug("steam: connecting rcon")
 	if s.rsock, err = newRCONSocket(s.dial, s.addr); err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("steam: could not open tcp socket")
 		return err
 	}
 	defer func() {
@@ -109,9 +97,6 @@ func (s *Server) initRCON() (err error) {
 		}
 	}()
 	if err := s.authenticate(); err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("steam: could not authenticate")
 		return err
 	}
 	s.rconInitialized = true
@@ -119,9 +104,6 @@ func (s *Server) initRCON() (err error) {
 }
 
 func (s *Server) authenticate() error {
-	log.WithFields(logrus.Fields{
-		"addr": s.addr,
-	}).Debug("steam: authenticating")
 	req := newRCONRequest(rrtAuth, s.rconPassword)
 	data, _ := req.marshalBinary()
 	if err := s.rsock.send(data); err != nil {
@@ -132,9 +114,6 @@ func (s *Server) authenticate() error {
 	if err != nil {
 		return err
 	}
-	log.WithFields(logrus.Fields{
-		"data": data,
-	}).Debug("steam: received empty response")
 	var resp rconResponse
 	if err := resp.unmarshalBinary(data); err != nil {
 		return err
@@ -156,7 +135,6 @@ func (s *Server) authenticate() error {
 	if resp.typ != rrtAuthResp || resp.id != req.id {
 		return ErrRCONAuthFailed
 	}
-	log.Debug("steam: authenticated")
 	return nil
 }
 
@@ -193,19 +171,10 @@ func (s *Server) Info() (*InfoResponse, error) {
 	log.Debug("receiving info response")
 	data, err := s.usock.receive()
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("could not receive info response")
 		return nil, err
 	}
-	log.WithFields(logrus.Fields{
-		"data": data,
-	}).Debug("received info response")
 	var res InfoResponse
 	if err := res.unmarshalBinary(data); err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("could not unmarshal info response")
 		return nil, err
 	}
 	return &res, nil
@@ -258,18 +227,12 @@ func (s *Server) Send(cmd string) (string, error) {
 	req := newRCONRequest(rrtExecCmd, cmd)
 	data, _ := req.marshalBinary()
 	if err := s.rsock.send(data); err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("steam: sending rcon request")
 		return "", err
 	}
 	// Send the mirror packet.
 	reqMirror := newRCONRequest(rrtRespValue, "")
 	data, _ = reqMirror.marshalBinary()
 	if err := s.rsock.send(data); err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Error("steam: sending rcon mirror request")
 		return "", err
 	}
 	var (
@@ -280,16 +243,10 @@ func (s *Server) Send(cmd string) (string, error) {
 	for {
 		data, err := s.rsock.receive()
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"err": err,
-			}).Error("steam: receiving rcon response")
 			return "", err
 		}
 		var resp rconResponse
 		if err := resp.unmarshalBinary(data); err != nil {
-			log.WithFields(logrus.Fields{
-				"err": err,
-			}).Error("steam: decoding response")
 			return "", err
 		}
 		if resp.typ != rrtRespValue {
@@ -326,14 +283,3 @@ var (
 	ErrInvalidResponseID      = errors.New("steam: invalid response id from server")
 	ErrInvalidResponseTrailer = errors.New("steam: invalid response trailer from server")
 )
-
-var log *logrus.Logger
-
-func SetLog(l *logrus.Logger) {
-	log = l
-}
-
-func init() {
-	log = logrus.New()
-	log.Out = ioutil.Discard
-}

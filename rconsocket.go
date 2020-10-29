@@ -5,8 +5,6 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 type rconSocket struct {
@@ -45,22 +43,13 @@ func (s *rconSocket) receive() (_ []byte, err error) {
 	buf := new(bytes.Buffer)
 	tr := io.TeeReader(s.conn, buf)
 	total := int(readLong(tr))
-	log.WithFields(logrus.Fields{
-		"total": total + 4,
-	}).Debug("steam: reading packet")
 	for total > 0 {
-		log.WithFields(logrus.Fields{
-			"bytes": total,
-		}).Debug("steam: reading")
 		b := make([]byte, total)
 		if err := s.conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond)); err != nil {
 			return nil, err
 		}
 		n, err := s.conn.Read(b)
 		if n > 0 {
-			log.WithFields(logrus.Fields{
-				"bytes": n,
-			}).Debug("steam: read")
 			_, err := buf.Write(b)
 			if err != nil {
 				return nil, err
@@ -68,19 +57,10 @@ func (s *rconSocket) receive() (_ []byte, err error) {
 			total -= n
 		}
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"err": err,
-			}).Error("steam: could not receive data")
 			if err == io.EOF {
 				return nil, err
 			}
 		}
-		log.WithFields(logrus.Fields{
-			"bytes": total,
-		}).Debug("steam: remaining")
 	}
-	log.WithFields(logrus.Fields{
-		"size": buf.Len(),
-	}).Debug("steam: read packet")
 	return buf.Bytes(), nil
 }

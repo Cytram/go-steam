@@ -168,7 +168,6 @@ func (s *Server) Info() (*InfoResponse, error) {
 	if err := s.usock.send(req); err != nil {
 		return nil, err
 	}
-	log.Debug("receiving info response")
 	data, err := s.usock.receive()
 	if err != nil {
 		return nil, err
